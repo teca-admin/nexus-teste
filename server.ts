@@ -23,17 +23,30 @@ async function startServer() {
   // AUTH API
   app.post("/api/login", async (req, res) => {
     const { username, password } = req.body;
-    const { data: user, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("username", username)
-      .eq("password", password)
-      .single();
+    try {
+      const { data: user, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("username", username)
+        .eq("password", password)
+        .single();
 
-    if (user) {
-      res.json({ success: true, user });
-    } else {
-      res.status(401).json({ success: false, message: "Credenciais inválidas" });
+      if (error) {
+        console.error("Supabase Login Error:", error);
+        return res.status(401).json({ 
+          success: false, 
+          message: error.code === "PGRST116" ? "Usuário ou senha incorretos" : `Erro no banco de dados: ${error.message}` 
+        });
+      }
+
+      if (user) {
+        res.json({ success: true, user });
+      } else {
+        res.status(401).json({ success: false, message: "Credenciais inválidas" });
+      }
+    } catch (err: any) {
+      console.error("Server Login Error:", err);
+      res.status(500).json({ success: false, message: "Erro interno no servidor" });
     }
   });
 
@@ -41,6 +54,25 @@ async function startServer() {
   app.get("/api/funcionarios", async (req, res) => {
     const { data: list, error } = await supabase.from("funcionarios").select("*");
     res.json(list || []);
+  });
+
+  app.get("/api/funcionarios/matricula/:matricula", async (req, res) => {
+    const { data: funcionario, error } = await supabase
+      .from("funcionarios")
+      .select("*")
+      .eq("matricula", req.params.matricula)
+      .single();
+
+    if (error) {
+      console.error("Supabase Matricula Error:", error);
+      return res.status(404).json({ success: false, message: "Matrícula não encontrada ou erro no banco" });
+    }
+
+    if (funcionario) {
+      res.json({ success: true, funcionario });
+    } else {
+      res.status(404).json({ success: false, message: "Matrícula não encontrada" });
+    }
   });
 
   app.post("/api/funcionarios", async (req, res) => {
