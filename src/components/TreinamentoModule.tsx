@@ -135,7 +135,14 @@ export const TreinamentoModule = ({ user }: { user: User }) => {
         setConteudos([...conteudos, { ...videoData, id: Date.now() }]);
         setVideoData({ titulo: "", url_video: "" });
       } else {
-        alert("Erro ao salvar vídeo. Verifique o tamanho do arquivo.");
+        let errorMessage = "Verifique o tamanho do arquivo ou a conexão.";
+        try {
+          const data = await res.json();
+          errorMessage = data.message || errorMessage;
+        } catch (e) {
+          if (res.status === 413) errorMessage = "O arquivo é muito grande para o servidor (Limite de 50MB).";
+        }
+        alert(`Erro ao salvar vídeo: ${errorMessage}`);
       }
     } catch (error) {
       alert("Erro de conexão ao enviar vídeo.");

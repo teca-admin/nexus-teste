@@ -196,8 +196,16 @@ app.get("/api/cursos/:id/conteudo", async (req, res) => {
 
 app.post("/api/cursos/conteudo", async (req, res) => {
   const { curso_id, titulo, url_video, ordem } = req.body;
+  console.log(`Tentando salvar vídeo: ${titulo} para o curso ${curso_id}`);
+  
   const { error } = await supabase.from("cursos_conteudos").insert([{ curso_id, titulo, url_video, ordem }]);
-  res.json({ success: !error });
+  
+  if (error) {
+    console.error("Erro ao inserir conteúdo no Supabase:", error);
+    return res.status(400).json({ success: false, message: error.message });
+  }
+  
+  res.json({ success: true });
 });
 
 app.delete("/api/cursos/conteudo/:id", async (req, res) => {
