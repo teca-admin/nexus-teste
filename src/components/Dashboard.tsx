@@ -11,29 +11,9 @@ export const Dashboard = () => {
     fetch("/api/dashboard").then(res => res.json()).then(setStats);
   }, []);
 
-  const handleCardClick = async (type: string, title: string) => {
-    setIsLoadingList(true);
-    try {
-      let endpoint = "";
-      if (type === "totalFuncionarios") endpoint = "/api/funcionarios";
-      else if (type === "asosVencidos") endpoint = "/api/funcionarios"; // We'll filter on client for now or add specific endpoints
-      else if (type === "semEscala") endpoint = "/api/funcionarios";
-      else if (type === "treinamentosPendentes") endpoint = "/api/funcionarios";
-
-      const res = await fetch(endpoint);
-      let data = await res.json();
-
-      // Simple client-side filtering for the demo/prototype
-      if (type === "asosVencidos") {
-        const sstRes = await fetch("/api/treinamentos/resultados"); // Just as example, real logic would need better endpoints
-        // For now let's just show all and label them if we don't have specific list endpoints
-      }
-
-      setSelectedList({ type, title, data });
-    } catch (error) {
-      console.error("Erro ao carregar lista:", error);
-    } finally {
-      setIsLoadingList(false);
+  const handleCardClick = (type: string, title: string) => {
+    if (stats.listas && stats.listas[type]) {
+      setSelectedList({ type, title, data: stats.listas[type] });
     }
   };
 
@@ -41,7 +21,7 @@ export const Dashboard = () => {
 
   const cards = [
     { id: "totalFuncionarios", label: "Total Funcionários", value: stats.totalFuncionarios, icon: Users, color: "text-blue-600" },
-    { id: "asosVencidos", label: "ASOs Vencidos", value: stats.asosVencidos, icon: AlertCircle, color: "text-nexus-primary" },
+    { id: "asosVencidos", label: "ASO", value: stats.asosVencidos, icon: AlertCircle, color: "text-nexus-primary" },
     { id: "semEscala", label: "Sem Escala Ativa", value: stats.semEscala, icon: Clock, color: "text-amber-600" },
     { id: "treinamentosPendentes", label: "Treinamentos Pendentes", value: stats.treinamentosPendentes, icon: GraduationCap, color: "text-indigo-600" },
   ];
@@ -60,7 +40,7 @@ export const Dashboard = () => {
           >
             <div>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider group-hover:text-nexus-primary transition-colors">{card.label}</p>
-              <p className={`text-3xl font-bold mt-1 ${card.color}`}>{card.value}</p>
+              <p className="text-3xl font-bold mt-1 text-slate-700">{card.value}</p>
             </div>
             <card.icon className={`w-8 h-8 opacity-20 ${card.color} group-hover:opacity-40 transition-opacity`} />
           </motion.div>
@@ -129,6 +109,7 @@ export const Dashboard = () => {
                       <th className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">Nome</th>
                       <th className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">Cargo / Setor</th>
                       <th className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">Status</th>
+                      <th className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">Info Adicional</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -146,6 +127,9 @@ export const Dashboard = () => {
                           }`}>
                             {f.status}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs font-bold text-nexus-primary uppercase">
+                          {f.info_adicional || "-"}
                         </td>
                       </tr>
                     ))}

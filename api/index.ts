@@ -258,21 +258,39 @@ app.get("/api/dashboard", async (req, res) => {
   next7Days.setDate(next7Days.getDate() + 7);
   const next7DaysStr = next7Days.toISOString().split('T')[0];
 
-  const { count: totalFuncionarios } = await supabase.from("funcionarios").select("*", { count: 'exact', head: true });
-  const { count: asosVencidos } = await supabase.from("sst_asos").select("*", { count: 'exact', head: true }).eq("status", "Vencido");
+  const { data: allFuncionarios } = await supabase.from("funcionarios").select("id, nome, matricula, cargo, setor, status");
+  const totalFuncionarios = allFuncionarios?.length || 0;
+
+  // ASOs
+  const { data: allAsos } = await supabase.from("sst_asos").select("*");
+  
+  const funcionariosComAsoVencido = allFuncionarios?.filter(f => {
+    const asosFunc = allAsos?.filter(a => a.funcionario_id === f.id);
+    if (!asosFunc || asosFunc.length === 0) return true; // Sem ASO
+    const latestAso = asosFunc.sort((a, b) => b.data_vencimento.localeCompare(a.data_vencimento))[0];
+    return latestAso.data_vencimento < today;
+  }) || [];
+
+  const asosVencidosCount = funcionariosComAsoVencido.length;
   
   // Sem escala ativa hoje
   const { data: escalasHoje } = await supabase.from("escalas").select("funcionario_id").eq("data", today);
   const idsComEscala = escalasHoje?.map(e => e.funcionario_id) || [];
-  const { count: semEscala } = await supabase.from("funcionarios")
-    .select("*", { count: 'exact', head: true })
-    .eq("status", "Ativo")
-    .not("id", "in", `(${idsComEscala.length > 0 ? idsComEscala.join(',') : '0'})`);
+  const semEscalaList = allFuncionarios?.filter(f => f.status === "Ativo" && !idsComEscala.includes(f.id)) || [];
+  const semEscalaCount = semEscalaList.length;
 
-  // Treinamentos pendentes (estimativa simples: cursos ativos que o funcionário ainda não passou)
-  const { count: totalCursos } = await supabase.from("cursos").select("*", { count: 'exact', head: true });
-  const { count: totalAprovados } = await supabase.from("resultados_treinamento").select("*", { count: 'exact', head: true }).eq("status", "Aprovado");
-  const treinamentosPendentes = ((totalFuncionarios || 0) * (totalCursos || 0)) - (totalAprovados || 0);
+  // Treinamentos pendentes
+  const { data: allCursos } = await supabase.from("cursos").select("id");
+  const { data: allAprovados } = await supabase.from("resultados_treinamento").select("funcionario_id, curso_id").eq("status", "Aprovado");
+  
+  const funcionariosComPendencia = allFuncionarios?.filter(f => {
+    const cursosAprovados = allAprovados?.filter(a => a.funcionario_id === f.id).map(a => a.curso_id) || [];
+    // Um funcionário tem pendência se existe algum curso que ele não foi aprovado
+    const temPendencia = allCursos?.some(c => !cursosAprovados.includes(c.id));
+    return temPendencia;
+  }) || [];
+
+  const treinamentosPendentesCount = funcionariosComPendencia.length;
 
   // Atividades Recentes
   const { data: novosFuncionarios } = await supabase.from("funcionarios").select("nome, setor, id").order("id", { ascending: false }).limit(3);
@@ -292,26 +310,37 @@ app.get("/api/dashboard", async (req, res) => {
   ].slice(0, 5);
 
   // Alertas Críticos
-  const { count: asosVencendo } = await supabase.from("sst_asos")
-    .select("*", { count: 'exact', head: true })
-    .gte("data_vencimento", today)
-    .lte("data_vencimento", next7DaysStr);
+  const asosVencendo = allAsos?.filter(a => a.data_vencimento >= today && a.data_vencimento <= next7DaysStr).length || 0;
 
   const alertas = [];
-  if (asosVencendo && asosVencendo > 0) {
+  if (asosVencendo > 0) {
     alertas.push({ texto: `${asosVencendo} ASOs vencem nos próximos 7 dias`, tipo: "erro" });
   }
-  if (semEscala && semEscala > 0) {
-    alertas.push({ texto: `${semEscala} colaboradores ativos estão sem escala para hoje`, tipo: "aviso" });
+  if (semEscalaCount > 0) {
+    alertas.push({ texto: `${semEscalaCount} colaboradores ativos estão sem escala para hoje`, tipo: "aviso" });
   }
 
   res.json({ 
-    totalFuncionarios: totalFuncionarios || 0, 
-    asosVencidos: asosVencidos || 0, 
-    semEscala: semEscala || 0, 
-    treinamentosPendentes: Math.max(0, treinamentosPendentes),
+    totalFuncionarios, 
+    asosVencidos: asosVencidosCount, 
+    semEscala: semEscalaCount, 
+    treinamentosPendentes: treinamentosPendentesCount,
     atividades,
-    alertas
+    alertas,
+    listas: {
+      totalFuncionarios: allFuncionarios,
+      asosVencidos: funcionariosComAsoVencido.map(f => {
+        const asosFunc = allAsos?.filter(a => a.funcionario_id === f.id);
+        const latestAso = asosFunc?.sort((a, b) => b.data_vencimento.localeCompare(a.data_vencimento))[0];
+        return { ...f, info_adicional: latestAso ? `Vencido em: ${new Date(latestAso.data_vencimento).toLocaleDateString()}` : "Nenhum ASO cadastrado" };
+      }),
+      semEscala: semEscalaList,
+      treinamentosPendentes: funcionariosComPendencia.map(f => {
+        const cursosAprovados = allAprovados?.filter(a => a.funcionario_id === f.id).length || 0;
+        const totalCursos = allCursos?.length || 0;
+        return { ...f, info_adicional: `${cursosAprovados}/${totalCursos} cursos concluídos` };
+      })
+    }
   });
 });
 
