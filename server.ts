@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 import path from "path";
 import fs from "fs";
@@ -24,7 +23,14 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // AUTH API
 app.post("/api/login", async (req, res) => {
   const { username, password } = req.body;
+  console.log(`Tentativa de login para o usuário: ${username}`);
+  
   try {
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("Erro: Credenciais do Supabase não configuradas!");
+      return res.status(500).json({ success: false, message: "Erro de configuração no servidor (Supabase URL/Key faltando)" });
+    }
+
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
@@ -33,7 +39,7 @@ app.post("/api/login", async (req, res) => {
       .single();
 
     if (error) {
-      console.error("Supabase Login Error:", error);
+      console.error("Erro no Supabase ao buscar usuário:", error.message);
       return res.status(401).json({ 
         success: false, 
         message: error.code === "PGRST116" ? "Usuário ou senha incorretos" : `Erro no banco de dados: ${error.message}` 
@@ -41,12 +47,13 @@ app.post("/api/login", async (req, res) => {
     }
 
     if (user) {
+      console.log("Login bem-sucedido para:", username);
       res.json({ success: true, user });
     } else {
       res.status(401).json({ success: false, message: "Credenciais inválidas" });
     }
   } catch (err: any) {
-    console.error("Server Login Error:", err);
+    console.error("Erro crítico no servidor durante o login:", err);
     res.status(500).json({ success: false, message: "Erro interno no servidor" });
   }
 });
@@ -395,22 +402,28 @@ app.get("/api/search", async (req, res) => {
 
 async function startServer() {
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, "dist")));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
-    });
+    const distPath = path.join(__dirname, "dist");
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
 // Export app for Vercel
