@@ -11,6 +11,8 @@ export interface Funcionario {
   id: number;
   nome: string;
   cpf: string;
+  rg?: string;
+  data_nascimento?: string;
   matricula: string;
   data_admissao: string;
   cargo: string;

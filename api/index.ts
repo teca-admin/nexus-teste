@@ -77,11 +77,11 @@ app.get("/api/funcionarios/matricula/:matricula", async (req, res) => {
 });
 
 app.post("/api/funcionarios", async (req, res) => {
-  const { nome, cpf, matricula, data_admissao, cargo, setor, email, telefone, endereco } = req.body;
+  const { nome, cpf, rg, data_nascimento, matricula, data_admissao, cargo, setor, email, telefone, endereco } = req.body;
   try {
     const { data: func, error: fErr } = await supabase
       .from("funcionarios")
-      .insert([{ nome, cpf, matricula, data_admissao, cargo, setor }])
+      .insert([{ nome, cpf, rg, data_nascimento, matricula, data_admissao, cargo, setor }])
       .select()
       .single();
 

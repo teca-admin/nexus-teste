@@ -7,7 +7,7 @@ export const RHModule = ({ user, onViewDetails }: { user: User, onViewDetails?: 
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
-    nome: "", cpf: "", matricula: "", data_admissao: "", cargo: "", setor: "",
+    nome: "", cpf: "", rg: "", data_nascimento: "", matricula: "", data_admissao: "", cargo: "", setor: "",
     email: "", telefone: "", endereco: ""
   });
 
@@ -24,7 +24,7 @@ export const RHModule = ({ user, onViewDetails }: { user: User, onViewDetails?: 
     if (res.ok) {
       setShowForm(false);
       load();
-      setFormData({ nome: "", cpf: "", matricula: "", data_admissao: "", cargo: "", setor: "", email: "", telefone: "", endereco: "" });
+      setFormData({ nome: "", cpf: "", rg: "", data_nascimento: "", matricula: "", data_admissao: "", cargo: "", setor: "", email: "", telefone: "", endereco: "" });
     }
   };
 
@@ -55,6 +55,14 @@ export const RHModule = ({ user, onViewDetails }: { user: User, onViewDetails?: 
                 <input className="input-field" value={formData.cpf} onChange={e => setFormData({...formData, cpf: e.target.value})} required />
               </div>
               <div>
+                <label className="text-xs font-bold uppercase text-slate-500">RG</label>
+                <input className="input-field" value={formData.rg} onChange={e => setFormData({...formData, rg: e.target.value})} required />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-slate-500">Data de Nascimento</label>
+                <input type="date" className="input-field" value={formData.data_nascimento} onChange={e => setFormData({...formData, data_nascimento: e.target.value})} required />
+              </div>
+              <div>
                 <label className="text-xs font-bold uppercase text-slate-500">Matrícula</label>
                 <input className="input-field" value={formData.matricula} onChange={e => setFormData({...formData, matricula: e.target.value})} required />
               </div>
@@ -63,7 +71,7 @@ export const RHModule = ({ user, onViewDetails }: { user: User, onViewDetails?: 
                 <input type="date" className="input-field" value={formData.data_admissao} onChange={e => setFormData({...formData, data_admissao: e.target.value})} required />
               </div>
               <div>
-                <label className="text-xs font-bold uppercase text-slate-500">Cargo</label>
+                <label className="text-xs font-bold uppercase text-slate-500">Função</label>
                 <input className="input-field" value={formData.cargo} onChange={e => setFormData({...formData, cargo: e.target.value})} required />
               </div>
               <div>
@@ -89,7 +97,7 @@ export const RHModule = ({ user, onViewDetails }: { user: User, onViewDetails?: 
             <tr>
               <th className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">Matrícula</th>
               <th className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">Nome</th>
-              <th className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">Cargo / Setor</th>
+              <th className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">Função / Setor</th>
               <th className="px-4 py-3 font-bold text-slate-500 uppercase text-[10px]">Status</th>
               <th className="px-4 py-3"></th>
             </tr>

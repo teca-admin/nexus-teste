@@ -47,6 +47,18 @@ export const View360 = ({ id, onClose }: { id: number, onClose: () => void }) =>
                   <p className="text-sm font-medium">{funcionario.cpf}</p>
                 </div>
                 <div>
+                  <p className="text-[10px] font-bold uppercase text-slate-500">Função • Setor</p>
+                  <p className="text-sm font-medium">{funcionario.cargo} • {funcionario.setor}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase text-slate-400">RG</p>
+                  <p className="text-sm font-medium">{funcionario.rg || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase text-slate-400">Data de Nascimento</p>
+                  <p className="text-sm font-medium">{funcionario.data_nascimento ? new Date(funcionario.data_nascimento).toLocaleDateString('pt-BR') : 'N/A'}</p>
+                </div>
+                <div>
                   <p className="text-[10px] font-bold uppercase text-slate-400">Matrícula</p>
                   <p className="text-sm font-mono">{funcionario.matricula}</p>
                 </div>
