@@ -3,8 +3,21 @@ import { Plus, Video, ClipboardList, Trash2, Save, CheckCircle, X, Image as Imag
 import { motion, AnimatePresence } from "motion/react";
 import { User } from "../types";
 
+import { createClient } from "@supabase/supabase-js";
+
 export const TreinamentoModule = ({ user }: { user: User }) => {
   const [tab, setTab] = useState("cursos");
+  const [supabaseClient, setSupabaseClient] = useState<any>(null);
+
+  useEffect(() => {
+    // Initialize Supabase Client for direct storage upload
+    fetch("/api/config/supabase")
+      .then(res => res.json())
+      .then(config => {
+        const client = createClient(config.url, config.key);
+        setSupabaseClient(client);
+      });
+  }, []);
   const [cursos, setCursos] = useState<any[]>([]);
   const [resultados, setResultados] = useState<any[]>([]);
   const [filterMatricula, setFilterMatricula] = useState("");
@@ -121,31 +134,57 @@ export const TreinamentoModule = ({ user }: { user: User }) => {
     
     setIsVideoLoading(true);
     try {
+      // 1. Check if it's a base64 (new upload) or a URL (existing)
+      let finalUrl = videoData.url_video;
+      
+      if (videoData.url_video.startsWith("data:")) {
+        if (!supabaseClient) throw new Error("Supabase client not initialized");
+        
+        // Convert base64 to Blob
+        const res = await fetch(videoData.url_video);
+        const blob = await res.blob();
+        const fileExt = blob.type.split('/')[1] || 'mp4';
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        
+        // Upload to storage
+        // We try 'videos' bucket first, then 'treinamentos'
+        let uploadResult = await supabaseClient.storage.from('videos').upload(fileName, blob);
+        
+        if (uploadResult.error) {
+           console.log("Erro ao subir no bucket 'videos', tentando 'treinamentos'...");
+           uploadResult = await supabaseClient.storage.from('treinamentos').upload(fileName, blob);
+        }
+
+        if (uploadResult.error) {
+          throw new Error(`Erro no upload para o Storage: ${uploadResult.error.message}`);
+        }
+        
+        // Get public URL
+        const { data: { publicUrl } } = supabaseClient.storage.from(uploadResult.data.path.split('/')[0] || 'videos').getPublicUrl(uploadResult.data.path);
+        finalUrl = publicUrl;
+      }
+
+      // 2. Save to database
       const res = await fetch("/api/cursos/conteudo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           curso_id: createdCursoId,
           titulo: videoData.titulo,
-          url_video: videoData.url_video,
+          url_video: finalUrl,
           ordem: conteudos.length + 1
         }),
       });
+      
       if (res.ok) {
-        setConteudos([...conteudos, { ...videoData, id: Date.now() }]);
+        setConteudos([...conteudos, { ...videoData, url_video: finalUrl, id: Date.now() }]);
         setVideoData({ titulo: "", url_video: "" });
       } else {
-        let errorMessage = "Verifique o tamanho do arquivo ou a conexão.";
-        try {
-          const data = await res.json();
-          errorMessage = data.message || errorMessage;
-        } catch (e) {
-          if (res.status === 413) errorMessage = "O arquivo é muito grande para o servidor (Limite de 50MB).";
-        }
-        alert(`Erro ao salvar vídeo: ${errorMessage}`);
+        const data = await res.json();
+        throw new Error(data.message || "Erro ao salvar no banco de dados");
       }
-    } catch (error) {
-      alert("Erro de conexão ao enviar vídeo.");
+    } catch (error: any) {
+      alert(`Erro ao processar vídeo: ${error.message}`);
     } finally {
       setIsVideoLoading(false);
     }

@@ -155,29 +155,59 @@ app.post("/api/escalas", async (req, res) => {
 
 // TREINAMENTO API
 app.get("/api/cursos", async (req, res) => {
-  const { data: list } = await supabase.from("cursos").select("*");
+  let { data: list, error } = await supabase.from("cursos").select("*");
+  
+  if (error && error.code === '42P01') {
+    const result = await supabase.from("treinamentos").select("*");
+    list = result.data;
+  }
+  
   res.json(list || []);
 });
 
 app.post("/api/cursos", async (req, res) => {
   const { nome, descricao, data_inicio, data_fim, capa_url } = req.body;
   const today = new Date().toISOString().split('T')[0];
-  const { data, error } = await supabase
+  
+  let { data, error } = await supabase
     .from("cursos")
     .insert([{ nome, descricao: descricao || "", data_inicio, data_fim, obrigatorio: true, capa_url: capa_url || null, data_criacao: today }])
     .select()
     .single();
+
+  if (error && error.code === '42P01') {
+    const result = await supabase
+      .from("treinamentos")
+      .insert([{ nome, descricao: descricao || "", data_inicio, data_fim, obrigatorio: true, capa_url: capa_url || null, data_criacao: today }])
+      .select()
+      .single();
+    data = result.data;
+    error = result.error;
+  }
+
   res.json({ success: !error, id: data?.id });
 });
 
 app.put("/api/cursos/:id", async (req, res) => {
   const { nome, data_inicio, data_fim, capa_url } = req.body;
-  const { error } = await supabase.from("cursos").update({ nome, data_inicio, data_fim, capa_url }).eq("id", req.params.id);
+  let { error } = await supabase.from("cursos").update({ nome, data_inicio, data_fim, capa_url }).eq("id", req.params.id);
+  
+  if (error && error.code === '42P01') {
+    const result = await supabase.from("treinamentos").update({ nome, data_inicio, data_fim, capa_url }).eq("id", req.params.id);
+    error = result.error;
+  }
+  
   res.json({ success: !error });
 });
 
 app.get("/api/cursos/:id/conteudo", async (req, res) => {
-  const { data: conteudos } = await supabase.from("cursos_conteudos").select("*").eq("curso_id", req.params.id).order("ordem");
+  let { data: conteudos, error: cErr } = await supabase.from("cursos_conteudos").select("*").eq("curso_id", req.params.id).order("ordem");
+  
+  if (cErr && cErr.code === '42P01') {
+    const result = await supabase.from("treinamento_conteudos").select("*").eq("curso_id", req.params.id).order("ordem");
+    conteudos = result.data;
+  }
+
   const { data: avaliacao } = await supabase.from("avaliacoes").select("*").eq("curso_id", req.params.id).single();
 
   let formattedQuestoes = [];
@@ -198,7 +228,14 @@ app.post("/api/cursos/conteudo", async (req, res) => {
   const { curso_id, titulo, url_video, ordem } = req.body;
   console.log(`Tentando salvar vídeo: ${titulo} para o curso ${curso_id}`);
   
-  const { error } = await supabase.from("cursos_conteudos").insert([{ curso_id, titulo, url_video, ordem }]);
+  // Try 'cursos_conteudos' first, then 'treinamento_conteudos' as fallback
+  let { error } = await supabase.from("cursos_conteudos").insert([{ curso_id, titulo, url_video, ordem }]);
+  
+  if (error && error.code === '42P01') { // Relation does not exist
+    console.log("Tabela 'cursos_conteudos' não encontrada, tentando 'treinamento_conteudos'...");
+    const result = await supabase.from("treinamento_conteudos").insert([{ curso_id, titulo, url_video, ordem }]);
+    error = result.error;
+  }
   
   if (error) {
     console.error("Erro ao inserir conteúdo no Supabase:", error);
@@ -209,7 +246,13 @@ app.post("/api/cursos/conteudo", async (req, res) => {
 });
 
 app.delete("/api/cursos/conteudo/:id", async (req, res) => {
-  const { error } = await supabase.from("cursos_conteudos").delete().eq("id", req.params.id);
+  let { error } = await supabase.from("cursos_conteudos").delete().eq("id", req.params.id);
+  
+  if (error && error.code === '42P01') {
+    const result = await supabase.from("treinamento_conteudos").delete().eq("id", req.params.id);
+    error = result.error;
+  }
+  
   res.json({ success: !error });
 });
 
@@ -236,7 +279,14 @@ app.post("/api/cursos/avaliacao", async (req, res) => {
 
 app.post("/api/treinamentos/responder", async (req, res) => {
   const { funcionario_id, curso_id, nota } = req.body;
-  const { data: results } = await supabase.from("resultados_treinamento").select("status").eq("funcionario_id", funcionario_id).eq("curso_id", curso_id);
+  
+  let { data: results, error: rErr } = await supabase.from("resultados_treinamento").select("status").eq("funcionario_id", funcionario_id).eq("curso_id", curso_id);
+  
+  if (rErr && rErr.code === '42P01') {
+    const result = await supabase.from("treinamento_resultados").select("status").eq("funcionario_id", funcionario_id).eq("curso_id", curso_id);
+    results = result.data;
+  }
+
   const isApproved = results?.some((r: any) => r.status === "Aprovado");
   const reprovadoCount = results?.filter((r: any) => r.status === "Reprovado").length || 0;
   
@@ -246,7 +296,14 @@ app.post("/api/treinamentos/responder", async (req, res) => {
   const { data: avaliacao } = await supabase.from("avaliacoes").select("*").eq("curso_id", curso_id).single();
   const status = nota >= (avaliacao?.nota_minima || 0) ? "Aprovado" : "Reprovado";
   const today = new Date().toISOString().split('T')[0];
-  const { error } = await supabase.from("resultados_treinamento").insert([{ funcionario_id, curso_id, nota, status, data_conclusao: today }]);
+  
+  let { error } = await supabase.from("resultados_treinamento").insert([{ funcionario_id, curso_id, nota, status, data_conclusao: today }]);
+  
+  if (error && error.code === '42P01') {
+    const result = await supabase.from("treinamento_resultados").insert([{ funcionario_id, curso_id, nota, status, data_conclusao: today }]);
+    error = result.error;
+  }
+
   res.json({ success: !error, status });
 });
 
@@ -358,6 +415,25 @@ app.get("/api/search", async (req, res) => {
   const { q } = req.query;
   const { data: results } = await supabase.from("funcionarios").select("id, nome, matricula, cpf, cargo, setor").or(`nome.ilike.%${q}%,matricula.ilike.%${q}%,cpf.ilike.%${q}%`);
   res.json(results || []);
+});
+
+// CONFIG API
+app.get("/api/config/supabase", (req, res) => {
+  res.json({
+    url: supabaseUrl,
+    key: supabaseKey
+  });
+});
+
+// DIAGNOSTIC API
+app.get("/api/debug/tables", async (req, res) => {
+  const { data, error } = await supabase.rpc('get_tables_info');
+  if (error) {
+    // Fallback if RPC doesn't exist
+    const { data: tables, error: tErr } = await supabase.from("pg_tables").select("tablename").eq("schemaname", "nexus");
+    return res.json({ error, tErr, tables });
+  }
+  res.json(data);
 });
 
 export default app;
