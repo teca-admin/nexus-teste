@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize Supabase
-const supabaseUrl = process.env.SUPABASE_URL || "https://mkxnzujtzmqhopvodein.supabase.co";
+const supabaseUrl = process.env.SUPABASE_URL || process.env.API_URL || "https://mkxnzujtzmqhopvodein.supabase.co";
 const supabaseKey = process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1reG56dWp0em1xaG9wdm9kZWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMDU1NjYsImV4cCI6MjA4NzY4MTU2Nn0.ZyFZLSa_ymkJRX7eikjugJi7xA77BC5Iy3NHyGVOZoI";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
