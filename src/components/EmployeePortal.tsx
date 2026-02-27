@@ -13,6 +13,9 @@ export const EmployeePortal = ({ onExit }: { onExit?: () => void }) => {
   const [watchedVideos, setWatchedVideos] = useState<Set<number>>(new Set());
   const [answers, setAnswers] = useState<any>({});
   const [result, setResult] = useState<any>(null);
+  const [isExamLoading, setIsExamLoading] = useState(false);
+  const [isLoginLoading, setIsLoginLoading] = useState(false);
+  const [isCursoLoading, setIsCursoLoading] = useState(false);
 
   const handleLogout = () => {
     setEmployee(null);
@@ -23,78 +26,95 @@ export const EmployeePortal = ({ onExit }: { onExit?: () => void }) => {
     setResult(null);
   };
 
-  const handleLogin = async () => {
-    const res = await fetch("/api/search?q=" + matricula);
-    const data = await res.json();
-    if (data.length > 0) {
-      const emp = data[0];
-      setEmployee(emp);
-      
-      const rres = await fetch(`/api/treinamentos/resultados?funcionario_id=${emp.id}`);
-      const rdata = await rres.json();
-      setEmployeeResults(rdata);
+  const handleLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!matricula) return;
+    
+    setIsLoginLoading(true);
+    try {
+      const res = await fetch("/api/search?q=" + matricula);
+      const data = await res.json();
+      if (data.length > 0) {
+        const emp = data[0];
+        setEmployee(emp);
+        
+        const rres = await fetch(`/api/treinamentos/resultados?funcionario_id=${emp.id}`);
+        const rdata = await rres.json();
+        setEmployeeResults(rdata);
 
-      const cres = await fetch("/api/cursos");
-      const cdata = await cres.json();
-      
-      // Mark courses as blocked if outside date range or attempts exceeded
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const processedCursos = cdata.map((c: any) => {
-        const startDate = c.data_inicio ? new Date(c.data_inicio) : null;
-        const endDate = c.data_fim ? new Date(c.data_fim) : null;
+        const cres = await fetch("/api/cursos");
+        const cdata = await cres.json();
         
-        if (startDate) startDate.setHours(0, 0, 0, 0);
-        if (endDate) endDate.setHours(23, 59, 59, 999);
+        // Mark courses as blocked if outside date range or attempts exceeded
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
         
-        const isStarted = !startDate || today >= startDate;
-        const isNotEnded = !endDate || today <= endDate;
+        const processedCursos = cdata.map((c: any) => {
+          const startDate = c.data_inicio ? new Date(c.data_inicio) : null;
+          const endDate = c.data_fim ? new Date(c.data_fim) : null;
+          
+          if (startDate) startDate.setHours(0, 0, 0, 0);
+          if (endDate) endDate.setHours(23, 59, 59, 999);
+          
+          const isStarted = !startDate || today >= startDate;
+          const isNotEnded = !endDate || today <= endDate;
+          
+          const courseResults = rdata.filter((r: any) => r.curso_id === c.id);
+          const isApproved = courseResults.some((r: any) => r.status === "Aprovado");
+          const reprovadoCount = courseResults.filter((r: any) => r.status === "Reprovado").length;
+          const attemptsExceeded = reprovadoCount >= 3;
+          
+          let isBlocked = !isStarted || !isNotEnded || attemptsExceeded || isApproved;
+          let blockReason = "";
+          if (!isStarted) blockReason = "Ainda não disponível";
+          else if (!isNotEnded) blockReason = "Período encerrado";
+          else if (isApproved) blockReason = "Treinamento Concluído";
+          else if (attemptsExceeded) blockReason = "Limite de tentativas excedido (3)";
+          
+          return {
+            ...c,
+            isBlocked,
+            blockReason,
+            isApproved,
+            reprovadoCount
+          };
+        });
         
-        const courseResults = rdata.filter((r: any) => r.curso_id === c.id);
-        const isApproved = courseResults.some((r: any) => r.status === "Aprovado");
-        const reprovadoCount = courseResults.filter((r: any) => r.status === "Reprovado").length;
-        const attemptsExceeded = reprovadoCount >= 3;
-        
-        let isBlocked = !isStarted || !isNotEnded || attemptsExceeded || isApproved;
-        let blockReason = "";
-        if (!isStarted) blockReason = "Ainda não disponível";
-        else if (!isNotEnded) blockReason = "Período encerrado";
-        else if (isApproved) blockReason = "Treinamento Concluído";
-        else if (attemptsExceeded) blockReason = "Limite de tentativas excedido (3)";
-        
-        return {
-          ...c,
-          isBlocked,
-          blockReason,
-          isApproved,
-          reprovadoCount
-        };
-      });
-      
-      setCursos(processedCursos);
-      setStep(2);
-    } else {
-      alert("Matrícula não encontrada");
+        setCursos(processedCursos);
+        setStep(2);
+      } else {
+        alert("Matrícula não encontrada");
+      }
+    } catch (err) {
+      alert("Erro ao acessar o portal. Tente novamente.");
+    } finally {
+      setIsLoginLoading(false);
     }
   };
 
   const startCurso = async (curso: any) => {
-    setSelectedCurso(curso);
-    const res = await fetch(`/api/cursos/${curso.id}/conteudo`);
-    const data = await res.json();
-    setContent(data);
-    
-    // If user has already had an attempt or is approved, mark all videos as watched
-    if (curso.reprovadoCount > 0 || curso.isApproved) {
-      const allVideoIds = data.conteudos.map((c: any) => c.id);
-      setWatchedVideos(new Set(allVideoIds));
-    } else {
-      setWatchedVideos(new Set());
+    setIsCursoLoading(true);
+    try {
+      setSelectedCurso(curso);
+      const res = await fetch(`/api/cursos/${curso.id}/conteudo`);
+      const data = await res.json();
+      setContent(data);
+      
+      // If user has already had an attempt or is approved, mark all videos as watched
+      if (curso.reprovadoCount > 0 || curso.isApproved) {
+        const allVideoIds = data.conteudos.map((c: any) => c.id);
+        setWatchedVideos(new Set(allVideoIds));
+      } else {
+        setWatchedVideos(new Set());
+      }
+      
+      setAnswers({});
+      setStep(3);
+    } catch (err) {
+      alert("Erro ao carregar conteúdo do curso.");
+    } finally {
+      setIsCursoLoading(false);
     }
-    
-    setAnswers({});
-    setStep(3);
   };
 
   const markAsWatched = (videoId: number) => {
@@ -129,44 +149,56 @@ export const EmployeePortal = ({ onExit }: { onExit?: () => void }) => {
   }, [step]);
 
   const submitExam = async () => {
-    let score = 0;
-    content.questoes.forEach((q: any) => {
-      const correctOpt = q.opcoes.find((o: any) => o.correta === 1);
-      if (answers[q.id] === correctOpt.id) score += (100 / content.questoes.length);
-    });
+    if (Object.keys(answers).length < content.questoes.length) {
+      alert("Por favor, responda todas as questões antes de finalizar.");
+      return;
+    }
 
-    const res = await fetch("/api/treinamentos/responder", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ funcionario_id: employee.id, curso_id: selectedCurso.id, nota: score }),
-    });
-    const data = await res.json();
-    setResult({ score, status: data.status });
+    setIsExamLoading(true);
+    try {
+      let score = 0;
+      content.questoes.forEach((q: any) => {
+        const correctOpt = q.opcoes.find((o: any) => o.correta === true || o.correta === 1);
+        if (answers[q.id] === correctOpt.id) score += (100 / content.questoes.length);
+      });
 
-    // Update local cursos state to reflect the new attempt
-    setCursos(prev => prev.map(c => {
-      if (c.id === selectedCurso.id) {
-        const isApproved = c.isApproved || data.status === "Aprovado";
-        const reprovadoCount = c.reprovadoCount + (data.status === "Reprovado" ? 1 : 0);
-        const attemptsExceeded = reprovadoCount >= 3;
-        
-        let isBlocked = c.isBlocked;
-        let blockReason = c.blockReason;
-        
-        if (isApproved) {
-          isBlocked = true;
-          blockReason = "Treinamento Concluído";
-        } else if (attemptsExceeded) {
-          isBlocked = true;
-          blockReason = "Limite de tentativas excedido (3)";
+      const res = await fetch("/api/treinamentos/responder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ funcionario_id: employee.id, curso_id: selectedCurso.id, nota: score }),
+      });
+      const data = await res.json();
+      setResult({ score, status: data.status });
+
+      // Update local cursos state to reflect the new attempt
+      setCursos(prev => prev.map(c => {
+        if (c.id === selectedCurso.id) {
+          const isApproved = c.isApproved || data.status === "Aprovado";
+          const reprovadoCount = c.reprovadoCount + (data.status === "Reprovado" ? 1 : 0);
+          const attemptsExceeded = reprovadoCount >= 3;
+          
+          let isBlocked = c.isBlocked;
+          let blockReason = c.blockReason;
+          
+          if (isApproved) {
+            isBlocked = true;
+            blockReason = "Treinamento Concluído";
+          } else if (attemptsExceeded) {
+            isBlocked = true;
+            blockReason = "Limite de tentativas excedido (3)";
+          }
+
+          return { ...c, isApproved, reprovadoCount, isBlocked, blockReason };
         }
+        return c;
+      }));
 
-        return { ...c, isApproved, reprovadoCount, isBlocked, blockReason };
-      }
-      return c;
-    }));
-
-    setStep(4);
+      setStep(4);
+    } catch (err) {
+      alert("Erro ao enviar avaliação. Verifique sua conexão.");
+    } finally {
+      setIsExamLoading(false);
+    }
   };
 
   return (
@@ -201,11 +233,22 @@ export const EmployeePortal = ({ onExit }: { onExit?: () => void }) => {
           {step === 1 && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-sm mx-auto space-y-6 bg-white p-8 rounded-2xl shadow-xl mt-20">
               <h2 className="text-xl font-bold text-center text-slate-800">Acesse seus Treinamentos</h2>
-              <div>
-                <label className="text-xs font-bold uppercase text-slate-500">Matrícula</label>
-                <input className="input-field text-center text-xl font-mono" value={matricula} onChange={e => setMatricula(e.target.value)} placeholder="000000" />
-              </div>
-              <button onClick={handleLogin} className="btn-primary w-full py-4 font-bold uppercase tracking-widest">Entrar no Portal</button>
+              <form onSubmit={handleLogin} className="space-y-6">
+                <div>
+                  <label className="text-xs font-bold uppercase text-slate-500">Matrícula</label>
+                  <input 
+                    className="input-field text-center text-xl font-mono" 
+                    value={matricula} 
+                    onChange={e => setMatricula(e.target.value)} 
+                    placeholder="000000"
+                    required
+                    autoFocus
+                  />
+                </div>
+                <button type="submit" disabled={isLoginLoading} className="btn-primary w-full py-4 font-bold uppercase tracking-widest disabled:opacity-50">
+                  {isLoginLoading ? "Acessando..." : "Entrar no Portal"}
+                </button>
+              </form>
             </motion.div>
           )}
 
@@ -245,14 +288,17 @@ export const EmployeePortal = ({ onExit }: { onExit?: () => void }) => {
                       </div>
                       <div className="flex items-center justify-between mt-auto pt-4">
                         <div className={`flex items-center text-[10px] font-bold uppercase gap-1 ${c.isBlocked ? 'text-slate-400' : 'text-nexus-primary'}`}>
+                          {isCursoLoading && selectedCurso?.id === c.id ? (
+                            <div className="w-3 h-3 border-2 border-nexus-primary/30 border-t-nexus-primary rounded-full animate-spin mr-1" />
+                          ) : null}
                           {c.isBlocked ? c.blockReason : (c.isApproved ? 'Refazer Treinamento' : 'Iniciar Treinamento')} {!c.isBlocked && <ChevronRight className="w-3 h-3" />}
                         </div>
                         <div className="text-right">
-                          <p className="text-[8px] text-slate-400 font-bold uppercase">
+                          <p className="text-xs text-slate-500 font-bold uppercase">
                             Até {c.data_fim ? new Date(c.data_fim).toLocaleDateString() : '-'}
                           </p>
                           {!c.isApproved && (
-                            <p className="text-[7px] text-slate-400 font-bold uppercase">
+                            <p className="text-[9px] text-slate-400 font-bold uppercase">
                               Tentativas: {c.reprovadoCount}/3
                             </p>
                           )}
@@ -353,7 +399,13 @@ export const EmployeePortal = ({ onExit }: { onExit?: () => void }) => {
                             </div>
                           </div>
                         ))}
-                        <button onClick={submitExam} className="btn-primary w-full py-4 font-bold uppercase tracking-widest mt-8">Finalizar e Enviar Respostas</button>
+                        <button 
+                          onClick={submitExam} 
+                          disabled={isExamLoading}
+                          className="btn-primary w-full py-4 font-bold uppercase tracking-widest mt-8 disabled:opacity-50"
+                        >
+                          {isExamLoading ? "Enviando..." : "Finalizar e Enviar Respostas"}
+                        </button>
                       </>
                     ) : (
                       <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-12 text-center space-y-3">

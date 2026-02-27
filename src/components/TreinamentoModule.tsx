@@ -13,6 +13,7 @@ export const TreinamentoModule = ({ user }: { user: User }) => {
   const [step, setStep] = useState(1);
   const [createdCursoId, setCreatedCursoId] = useState<number | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isManageLoading, setIsManageLoading] = useState<number | null>(null);
   
   const [formData, setFormData] = useState({ 
     nome: "", 
@@ -75,30 +76,37 @@ export const TreinamentoModule = ({ user }: { user: User }) => {
   };
 
   const manageContent = async (curso: any) => {
-    setCreatedCursoId(curso.id);
-    setFormData({
-      nome: curso.nome,
-      data_inicio: curso.data_inicio || new Date().toISOString().split('T')[0],
-      data_fim: curso.data_fim || "",
-      capa_url: curso.capa_url || ""
-    });
-    
-    const res = await fetch(`/api/cursos/${curso.id}/conteudo`);
-    const data = await res.json();
-    setConteudos(data.conteudos);
-    if (data.avaliacao) {
-      setAvaliacaoData({
-        nota_minima: data.avaliacao.nota_minima,
-        tentativas_maximas: data.avaliacao.tentativas_maximas
+    setIsManageLoading(curso.id);
+    try {
+      setCreatedCursoId(curso.id);
+      setFormData({
+        nome: curso.nome,
+        data_inicio: curso.data_inicio || new Date().toISOString().split('T')[0],
+        data_fim: curso.data_fim || "",
+        capa_url: curso.capa_url || ""
       });
-      setQuestoes(data.questoes);
-    } else {
-      setAvaliacaoData({ nota_minima: 70, tentativas_maximas: 3 });
-      setQuestoes([]);
+      
+      const res = await fetch(`/api/cursos/${curso.id}/conteudo`);
+      const data = await res.json();
+      setConteudos(data.conteudos);
+      if (data.avaliacao) {
+        setAvaliacaoData({
+          nota_minima: data.avaliacao.nota_minima,
+          tentativas_maximas: data.avaliacao.tentativas_maximas
+        });
+        setQuestoes(data.questoes);
+      } else {
+        setAvaliacaoData({ nota_minima: 70, tentativas_maximas: 3 });
+        setQuestoes([]);
+      }
+      
+      setStep(1); // Start at step 1 to allow editing basic info, then proceed to step 2
+      setShowForm(true);
+    } catch (error) {
+      alert("Erro ao carregar conteúdo do curso.");
+    } finally {
+      setIsManageLoading(null);
     }
-    
-    setStep(1); // Start at step 1 to allow editing basic info, then proceed to step 2
-    setShowForm(true);
   };
 
   const addVideo = async () => {
@@ -255,16 +263,18 @@ export const TreinamentoModule = ({ user }: { user: User }) => {
                 </div>
                 <div className="p-4 flex-1">
                   <h4 className="font-bold text-slate-800 mb-1">{c.nome}</h4>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase">
+                  <p className="text-xs text-slate-500 font-bold uppercase">
                     Disponível: {c.data_inicio ? new Date(c.data_inicio).toLocaleDateString() : '-'} até {c.data_fim ? new Date(c.data_fim).toLocaleDateString() : '-'}
                   </p>
                 </div>
                 <div className="px-4 py-3 border-t bg-slate-50 flex justify-end">
                   <button 
                     onClick={() => manageContent(c)}
-                    className="text-nexus-primary text-[10px] font-bold uppercase hover:underline"
+                    disabled={isManageLoading === c.id}
+                    className="text-nexus-primary text-[10px] font-bold uppercase hover:underline flex items-center gap-1 disabled:opacity-50"
                   >
-                    Gerenciar Conteúdo
+                    {isManageLoading === c.id && <div className="w-3 h-3 border-2 border-nexus-primary/30 border-t-nexus-primary rounded-full animate-spin" />}
+                    {isManageLoading === c.id ? "Carregando..." : "Gerenciar Conteúdo"}
                   </button>
                 </div>
               </div>

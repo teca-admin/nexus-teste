@@ -42,6 +42,7 @@ export const Login = ({ onLogin }: { onLogin: (user: User) => void }) => {
               value={username} 
               onChange={e => setUsername(e.target.value)} 
               required 
+              autoFocus
             />
           </div>
           <div>

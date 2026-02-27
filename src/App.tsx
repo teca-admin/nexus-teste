@@ -145,7 +145,7 @@ export default function App() {
             transition={{ duration: 0.2 }}
           >
             {activeModule === "dashboard" && <Dashboard />}
-            {activeModule === "rh" && <RHModule user={user} />}
+            {activeModule === "rh" && <RHModule user={user} onViewDetails={setSelectedEmployeeId} />}
             {activeModule === "sst" && <SSTModule user={user} />}
             {activeModule === "escala" && <EscalaModule user={user} />}
             {activeModule === "treinamento" && <TreinamentoModule user={user} />}

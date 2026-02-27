@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { motion } from "motion/react";
 import { User, Funcionario } from "../types";
 
-export const RHModule = ({ user }: { user: User }) => {
+export const RHModule = ({ user, onViewDetails }: { user: User, onViewDetails?: (id: number) => void }) => {
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -111,7 +111,12 @@ export const RHModule = ({ user }: { user: User }) => {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button className="text-nexus-primary hover:underline font-bold text-xs uppercase">Detalhes</button>
+                  <button 
+                    onClick={() => onViewDetails?.(f.id)}
+                    className="text-nexus-primary hover:underline font-bold text-xs uppercase"
+                  >
+                    Detalhes
+                  </button>
                 </td>
               </tr>
             ))}
